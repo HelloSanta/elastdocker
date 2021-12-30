@@ -5,6 +5,9 @@ networks:
   default:
     name: elastic
     external: false
+  ReverseProxy:
+    external: true
+
 
 # will contain all elasticsearch data.
 volumes:
@@ -93,12 +96,20 @@ services:
       ELASTIC_USERNAME: ${ELASTIC_USERNAME}
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
       ELASTICSEARCH_HOST_PORT: https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
-    secrets:
-      - source: elastic.ca
-        target: /certs/ca.crt
-      - source: kibana.certificate
-        target: /certs/kibana.crt
-      - source: kibana.key
-        target: /certs/kibana.key
-    ports:
-      - "5601:5601"
+    networks:
+      - ReverseProxy
+    labels:
+      - traefik.http.middlewares.kibana-redirect-to-websecure.redirectscheme.scheme=https
+      - traefik.http.middlewares.kibana-security.headers.stsIncludeSubdomains=false
+      - traefik.http.middlewares.kibana-security.headers.stsPreload=true
+      - traefik.http.middlewares.kibana-security.headers.stsSeconds=31536000
+      - traefik.http.middlewares.kibana-security.headers.forceSTSHeader=true
+      - traefik.http.middlewares.kibana-secured.chain.middlewares=kibana-redirect-to-websecure,kibana-security
+      - traefik.http.routers.kibana.middlewares=kibana-secured
+      - traefik.http.routers.kibana.rule=Host(`kibana.dev2.hellosanta.tw`)
+      - traefik.http.routers.kibana.tls=true
+      - traefik.http.routers.kibana.tls.options=default
+      - traefik.http.routers.kibana.entrypoints=web, websecure
+      - traefik.http.services.kibana.loadbalancer.server.port=5601
+      - traefik.http.routers.kibana.tls.certresolver=myresolver
+
